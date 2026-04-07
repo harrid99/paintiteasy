@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+<meta name="apple-mobile-web-app-title" content="Draw">
+<meta name="screen-orientation" content="portrait">
+<title>Draw</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+@media (orientation:landscape){html{transform:rotate(-90deg);transform-origin:left top;width:100vh;height:100vw;position:fixed;top:100%;left:0;}}
+html,body{width:100%;height:100%;overflow:hidden;background:#fff;position:fixed;top:0;left:0;}
+body{display:block;position:fixed;inset:0;}
+#canvas-area{position:fixed;inset:0;overflow:hidden;}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;display:block;object-fit:fill;}
+#tab-undo{position:absolute;top:0;left:0;width:120px;height:120px;background:#1a1a1a;border-radius:0 0 26px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:50;transition:background 0.1s,opacity 0.2s;}
+#tab-undo:active{background:#3a3a3a;}
+#tab-undo svg{pointer-events:none;}
+#tab-undo.hidden{opacity:0;pointer-events:none;}
+#tab-menu{position:absolute;top:0;right:0;width:120px;height:120px;background:#1a1a1a;border-radius:0 0 0 26px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:50;transition:background 0.1s,opacity 0.2s;}
+#tab-menu:active{background:#3a3a3a;}
+#tab-menu svg{pointer-events:none;}
+#tab-menu.hidden{opacity:0;pointer-events:none;}
+#menu{position:absolute;inset:0;background:#f2efe8;display:flex;flex-direction:column;z-index:40;transform:translateY(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);}
+#menu.open{transform:translateY(0);}
+#top-controls{border-bottom:8px solid #1a1a1a;padding:16px;display:flex;gap:14px;align-items:center;flex-shrink:0;}
+#new-canvas-btn{flex:1;height:120px;background:#1a1a1a;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s;-webkit-user-select:none;}
+#new-canvas-btn.armed{background:#8B2000;}
+#new-canvas-btn svg{pointer-events:none;}
+#tip-btn{flex:1;height:120px;background:#e4e0d8;border:8px solid #1a1a1a;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;}
+#tip-btn:active{background:#d0ccc4;}
+#tip-dot{background:#1a1a1a;border-radius:50%;transition:width 0.18s,height 0.18s;}
+#tip-dot.small{width:56px;height:56px;}
+#tip-dot.large{width:88px;height:88px;}
+#colour-panel{flex:1;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:14px;}
+#colour-panel::-webkit-scrollbar{display:none;}
+.colour-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px;}
+.swatch-wrap{aspect-ratio:1;border-radius:12px;cursor:pointer;transition:transform 0.08s;}
+.swatch-wrap:active{transform:scale(0.94);}
+.swatch-wrap.active .swatch-inner{box-shadow:inset 0 0 0 10px #1a1a1a;}
+.swatch-inner{width:100%;height:100%;border-radius:10px;}
+.swatch-wrap.light-border:not(.active) .swatch-inner{box-shadow:inset 0 0 0 3px #bbb;}
+</style>
+</head>
+<body>
+
+<div id="canvas-area">
+  <div id="ver" style="position:fixed;bottom:10px;right:12px;color:#bbb;font-size:11px;font-family:monospace;z-index:999;pointer-events:none;">23</div>
+  <canvas id="c"></canvas>
+  <div id="tab-undo" aria-label="Undo">
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+      <path d="M16 14 L16 38 Q16 52 32 52 Q48 52 48 38 L48 14" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+  </div>
+  <div id="tab-menu" aria-label="Open menu">
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+      <circle cx="15" cy="15" r="7" fill="white" opacity="0.9"/>
+      <circle cx="41" cy="15" r="7" fill="white" opacity="0.9"/>
+      <circle cx="15" cy="41" r="7" fill="white" opacity="0.9"/>
+      <circle cx="41" cy="41" r="7" fill="white" opacity="0.9"/>
+    </svg>
+  </div>
+</div>
+
+<div id="menu">
+  <div id="top-controls">
+    <button id="new-canvas-btn" aria-label="New canvas or save">
+      <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+        <path d="M14 58 L14 14 L58 58 L58 14" stroke="white" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+    </button>
+    <button id="tip-btn" aria-label="Toggle tip size">
+      <div id="tip-dot" class="small"></div>
+    </button>
+  </div>
+  <div id="colour-panel">
+    <div class="colour-row">
+      <div class="swatch-wrap active" data-c="#1a1a1a" data-n="black"><div class="swatch-inner" style="background:#1a1a1a;box-shadow:inset 0 0 0 3px #666"></div></div>
+      <div class="swatch-wrap"        data-c="#888888" data-n="grey"><div class="swatch-inner" style="background:#888888"></div></div>
+      <div class="swatch-wrap light-border" data-c="#D8D4CC" data-n="off white"><div class="swatch-inner" style="background:#D8D4CC"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#921818" data-n="dark red"><div class="swatch-inner" style="background:#921818"></div></div>
+      <div class="swatch-wrap" data-c="#D42B2B" data-n="red"><div class="swatch-inner" style="background:#D42B2B"></div></div>
+      <div class="swatch-wrap" data-c="#E88070" data-n="coral"><div class="swatch-inner" style="background:#E88070"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#C05010" data-n="dark orange"><div class="swatch-inner" style="background:#C05010"></div></div>
+      <div class="swatch-wrap" data-c="#F07820" data-n="orange"><div class="swatch-inner" style="background:#F07820"></div></div>
+      <div class="swatch-wrap" data-c="#F4B060" data-n="light orange"><div class="swatch-inner" style="background:#F4B060"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#9A8010" data-n="dark yellow"><div class="swatch-inner" style="background:#9A8010"></div></div>
+      <div class="swatch-wrap" data-c="#D4B020" data-n="yellow"><div class="swatch-inner" style="background:#D4B020"></div></div>
+      <div class="swatch-wrap" data-c="#EAD878" data-n="pale yellow"><div class="swatch-inner" style="background:#EAD878"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#1E5A20" data-n="forest green"><div class="swatch-inner" style="background:#1E5A20"></div></div>
+      <div class="swatch-wrap" data-c="#3A9A30" data-n="leaf green"><div class="swatch-inner" style="background:#3A9A30"></div></div>
+      <div class="swatch-wrap" data-c="#82C870" data-n="sage green"><div class="swatch-inner" style="background:#82C870"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#1A3E7A" data-n="dark blue"><div class="swatch-inner" style="background:#1A3E7A"></div></div>
+      <div class="swatch-wrap" data-c="#3A72C0" data-n="blue"><div class="swatch-inner" style="background:#3A72C0"></div></div>
+      <div class="swatch-wrap" data-c="#82AEE0" data-n="light blue"><div class="swatch-inner" style="background:#82AEE0"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#4A1A7A" data-n="dark purple"><div class="swatch-inner" style="background:#4A1A7A"></div></div>
+      <div class="swatch-wrap" data-c="#8040B8" data-n="purple"><div class="swatch-inner" style="background:#8040B8"></div></div>
+      <div class="swatch-wrap" data-c="#B882D8" data-n="lilac"><div class="swatch-inner" style="background:#B882D8"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#921858" data-n="dark pink"><div class="swatch-inner" style="background:#921858"></div></div>
+      <div class="swatch-wrap" data-c="#D43888" data-n="pink"><div class="swatch-inner" style="background:#D43888"></div></div>
+      <div class="swatch-wrap" data-c="#E882B8" data-n="light pink"><div class="swatch-inner" style="background:#E882B8"></div></div>
+    </div>
+    <div class="colour-row">
+      <div class="swatch-wrap" data-c="#6A3018" data-n="dark brown"><div class="swatch-inner" style="background:#6A3018"></div></div>
+      <div class="swatch-wrap" data-c="#A86030" data-n="brown"><div class="swatch-inner" style="background:#A86030"></div></div>
+      <div class="swatch-wrap" data-c="#D0A070" data-n="tan"><div class="swatch-inner" style="background:#D0A070"></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const area    = document.getElementById('canvas-area');
+const menu    = document.getElementById('menu');
+const tabMenu = document.getElementById('tab-menu');
+const tabUndo = document.getElementById('tab-undo');
+const tipDot  = document.getElementById('tip-dot');
+const newBtn  = document.getElementById('new-canvas-btn');
+const colPanel= document.getElementById('colour-panel');
+
+let colour='#1a1a1a', tipSize='small', menuOpen=false;
+let drawing=false, penActive=false;
+let lastX=0, lastY=0, pts=[];
+let armed=false, armTimer=null, holdTimer=null;
+let undoStack=[], autoSaveTimer=null;
+let speechReady=false;
+let touchStartX=0, touchStartY=0, touchMoved=false, eraserActive=false, fillLocked=false;
+
+// auto-close fill tracking
+let strokeStartX=0, strokeStartY=0;
+let strokeMinX=0, strokeMinY=0, strokeMaxX=0, strokeMaxY=0;
+let strokePointCount=0;
+
+const CLOSE_THRESHOLD=120;
+const MIN_STROKE_LENGTH=60;
+
+const SMALL_MIN=40, SMALL_RANGE=40;
+const LARGE_MIN=100, LARGE_RANGE=60;
+const SMOOTH=4, UNDO_MAX=8, FILL_TOL=18;
+const ERASE_THRESHOLD=28;
+// TTS: try FullyKiosk native API first, fall back to speechSynthesis
+function speak(txt){
+  try{
+    if(window.fully&&fully.textToSpeech){
+      fully.textToSpeech(txt);
+      return;
+    }
+  }catch(e){}
+  try{
+    const synth=window.speechSynthesis;
+    synth.cancel();
+    const u=new SpeechSynthesisUtterance(txt);
+    u.rate=0.88;u.volume=1.0;
+    synth.speak(u);
+  }catch(e){}
+}
+function primeSpeech(){
+  if(speechReady)return;
+  speechReady=true;
+  speak('');
+}
+
+const CANVAS_W=2732, CANVAS_H=2732;
+function resize(){
+  if(canvas.width===CANVAS_W)return;
+  canvas.width=CANVAS_W;canvas.height=CANVAS_H;
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+}
+function clearCanvas(){ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);}
+function saveUndo(){
+  undoStack.push(ctx.getImageData(0,0,canvas.width,canvas.height));
+  if(undoStack.length>UNDO_MAX)undoStack.shift();
+}
+function doUndo(){
+  if(!undoStack.length){speak('nothing to undo');return;}
+  ctx.putImageData(undoStack.pop(),0,0);
+  speak('undone');scheduleAutoSave();
+}
+function scheduleAutoSave(){
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer=setTimeout(()=>{
+    try{
+      const vw=window.innerWidth,vh=window.innerHeight;
+      const scaleX=CANVAS_W/vw,scaleY=CANVAS_H/vh;
+      const cropW=Math.round(vw*Math.min(scaleX,scaleY));
+      const cropH=Math.round(vh*Math.min(scaleX,scaleY));
+      const off=document.createElement('canvas');
+      off.width=vw;off.height=vh;
+      off.getContext('2d').drawImage(canvas,0,0,cropW,cropH,0,0,vw,vh);
+      localStorage.setItem('drawing_autosave',off.toDataURL('image/png'));
+    }catch(e){}
+  },3000);
+}
+function restoreAutoSave(){
+  try{
+    const d=localStorage.getItem('drawing_autosave');
+    if(!d)return;
+    const img=new Image();
+    img.onload=()=>{ctx.drawImage(img,0,0);speak('last drawing restored');};
+    img.src=d;
+  }catch(e){}
+}
+function saveToFile(){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  const scaleX=CANVAS_W/vw, scaleY=CANVAS_H/vh;
+  const cropW=Math.round(vw*Math.min(scaleX,scaleY));
+  const cropH=Math.round(vh*Math.min(scaleX,scaleY));
+  const offscreen=document.createElement('canvas');
+  offscreen.width=vw; offscreen.height=vh;
+  const octx=offscreen.getContext('2d');
+  octx.drawImage(canvas,0,0,cropW,cropH,0,0,vw,vh);
+  offscreen.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const now=new Date();
+    a.href=url;
+    a.download=`drawing-${now.getDate()}-${now.toLocaleString('en',{month:'short'})}-${now.getFullYear()}.png`;
+    document.body.appendChild(a);a.click();
+    document.body.removeChild(a);URL.revokeObjectURL(url);
+    speak('drawing saved');
+    closeMenu();
+  },'image/png');
+}
+resize();
+window.addEventListener('load',()=>setTimeout(restoreAutoSave,400));
+
+function openMenu(){
+  menuOpen=true;
+  menu.classList.add('open');
+  tabUndo.classList.add('hidden');
+  tabMenu.classList.add('hidden');
+}
+function closeMenu(){
+  menuOpen=false;
+  menu.classList.remove('open');
+  tabUndo.classList.remove('hidden');
+  tabMenu.classList.remove('hidden');
+}
+
+function onTap(el,fn){
+  let sx=0,sy=0,moved=false;
+  el.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;moved=false;e.preventDefault();},{passive:false});
+  el.addEventListener('pointermove',e=>{const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.sqrt(dx*dx+dy*dy)>10)moved=true;});
+  el.addEventListener('pointerup',e=>{if(!moved){e.preventDefault();fn(e);}},{passive:false});
+}
+onTap(tabMenu,()=>{primeSpeech();if(menuOpen)closeMenu();else{speak('drawing tools');openMenu();}});
+onTap(tabUndo,()=>{primeSpeech();doUndo();});
+newBtn.addEventListener('pointerdown',e=>{e.preventDefault();holdTimer=setTimeout(()=>{clearTimeout(armTimer);armed=false;newBtn.classList.remove('armed');saveToFile();},800);},{passive:false});
+newBtn.addEventListener('pointerup',e=>{e.preventDefault();clearTimeout(holdTimer);if(!armed){armed=true;newBtn.classList.add('armed');speak('tap again for new canvas, or hold to save');armTimer=setTimeout(()=>{armed=false;newBtn.classList.remove('armed');},3000);}else{clearTimeout(armTimer);armed=false;newBtn.classList.remove('armed');saveUndo();clearCanvas();speak('new canvas');closeMenu();scheduleAutoSave();}},{passive:false});
+newBtn.addEventListener('pointercancel',()=>clearTimeout(holdTimer));
+onTap(document.getElementById('tip-btn'),()=>{primeSpeech();if(tipSize==='small'){tipSize='large';tipDot.className='large';speak('big tip');}else{tipSize='small';tipDot.className='small';speak('small tip');}closeMenu();});
+document.querySelectorAll('.swatch-wrap').forEach(sw=>{onTap(sw,e=>{e.stopPropagation();primeSpeech();document.querySelectorAll('.swatch-wrap').forEach(x=>x.classList.remove('active'));sw.classList.add('active');colour=sw.dataset.c;speak(sw.dataset.n);closeMenu();});});
+colPanel.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+colPanel.addEventListener('touchmove',e=>e.stopPropagation(),{passive:true});
+function getPos(e){
+  const r=canvas.getBoundingClientRect();
+  return{
+    x:(e.clientX-r.left)*(CANVAS_W/r.width),
+    y:(e.clientY-r.top)*(CANVAS_H/r.height),
+    p:Math.max(0,Math.min(1,e.pressure||0.5)),
+    isPen:e.pointerType==='pen',
+    isTouch:e.pointerType==='touch'
+  };
+}
+function penLineWidth(p){
+  if(tipSize==='large') return LARGE_MIN+p*LARGE_RANGE;
+  return SMALL_MIN+p*SMALL_RANGE;
+}
+function eraseLineWidth(p){ return 36+p*108; }
+
+canvas.addEventListener('pointerdown',e=>{
+  if(e.target.closest('#menu')||e.target.closest('#tab-menu')||e.target.closest('#tab-undo'))return;
+  primeSpeech();
+  if(menuOpen){closeMenu();return;}
+  const pos=getPos(e);
+  if(pos.isTouch){
+    touchStartX=pos.x;touchStartY=pos.y;touchMoved=false;eraserActive=false;fillLocked=false;
+    lastX=pos.x;lastY=pos.y;return;
+  }
+  if(pos.isPen&&!penActive){
+    penActive=true;drawing=true;saveUndo();
+    pts=[{x:pos.x,y:pos.y,p:pos.p}];lastX=pos.x;lastY=pos.y;
+    strokeStartX=pos.x;strokeStartY=pos.y;
+    strokeMinX=pos.x;strokeMinY=pos.y;
+    strokeMaxX=pos.x;strokeMaxY=pos.y;
+    strokePointCount=1;
+  }
+},{passive:false});
+
+canvas.addEventListener('pointermove',e=>{
+  e.preventDefault();
+  const pos=getPos(e);
+  if(pos.isTouch&&!penActive){
+    const dx=pos.x-touchStartX,dy=pos.y-touchStartY;
+    if(!touchMoved&&Math.sqrt(dx*dx+dy*dy)>ERASE_THRESHOLD){
+      touchMoved=true;eraserActive=true;saveUndo();
+    }
+    if(eraserActive){
+      ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(pos.x,pos.y);
+      ctx.strokeStyle='#ffffff';ctx.lineWidth=eraseLineWidth(pos.p);
+      ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+      lastX=pos.x;lastY=pos.y;scheduleAutoSave();
+    }
+    return;
+  }
+  if(!drawing||!penActive)return;
+  pts.push({x:pos.x,y:pos.y,p:pos.p});
+  if(pts.length>SMOOTH)pts.shift();
+  const ax=pts.reduce((s,p)=>s+p.x,0)/pts.length;
+  const ay=pts.reduce((s,p)=>s+p.y,0)/pts.length;
+  const ap=pts.reduce((s,p)=>s+p.p,0)/pts.length;
+  ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(ax,ay);
+  ctx.strokeStyle=colour;ctx.lineWidth=penLineWidth(ap);
+  ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+  lastX=ax;lastY=ay;
+  strokeMinX=Math.min(strokeMinX,ax);strokeMinY=Math.min(strokeMinY,ay);
+  strokeMaxX=Math.max(strokeMaxX,ax);strokeMaxY=Math.max(strokeMaxY,ay);
+  strokePointCount++;
+  scheduleAutoSave();
+},{passive:false});
+
+canvas.addEventListener('pointerup',e=>{
+  const pos=getPos(e);
+  if(pos.isPen){
+    drawing=false;penActive=false;pts=[];
+    const dx=lastX-strokeStartX, dy=lastY-strokeStartY;
+    const closeDist=Math.sqrt(dx*dx+dy*dy);
+    const strokeSpan=Math.max(strokeMaxX-strokeMinX,strokeMaxY-strokeMinY);
+    if(closeDist<CLOSE_THRESHOLD&&strokeSpan>MIN_STROKE_LENGTH&&strokePointCount>8){
+      ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(strokeStartX,strokeStartY);
+      ctx.strokeStyle=colour;ctx.lineWidth=penLineWidth(0.5);
+      ctx.lineCap='round';ctx.stroke();
+      const cx=Math.round((strokeMinX+strokeMaxX)/2);
+      const cy=Math.round((strokeMinY+strokeMaxY)/2);
+      const strokeRgb=hexToRgb(colour);
+      setTimeout(()=>{
+        const interior=findInterior(cx,cy,strokeMinX,strokeMinY,strokeMaxX,strokeMaxY,strokeRgb);
+        if(interior){
+          floodFill(interior.x,interior.y,colour);
+          speak('filled');
+          scheduleAutoSave();
+        }
+      },80);
+    }
+    return;
+  }
+  if(pos.isTouch&&!touchMoved&&!penActive&&!fillLocked){
+    fillLocked=true;
+    floodFill(Math.round(pos.x),Math.round(pos.y),colour,false);
+    speak('fill');scheduleAutoSave();
+  }
+  if(pos.isTouch){eraserActive=false;lastX=0;lastY=0;}
+});
+canvas.addEventListener('pointercancel',e=>{
+  if(e.pointerType==='pen'){drawing=false;penActive=false;pts=[];}
+  eraserActive=false;
+});
+
+function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function colMatch(d,i,tr,tg,tb){return Math.abs(d[i]-tr)<=FILL_TOL&&Math.abs(d[i+1]-tg)<=FILL_TOL&&Math.abs(d[i+2]-tb)<=FILL_TOL;}
+function findInterior(cx,cy,minX,minY,maxX,maxY,strokeRgb){
+  const img=ctx.getImageData(0,0,CANVAS_W,CANVAS_H);
+  const d=img.data, w=CANVAS_W;
+  const span=Math.min(maxX-minX,maxY-minY);
+  const[sr,sg,sb]=strokeRgb||[0,0,0];
+  for(let r=4;r<span/2;r+=5){
+    for(let angle=0;angle<360;angle+=10){
+      const rad=angle*Math.PI/180;
+      const px=Math.round(cx+r*Math.cos(rad));
+      const py=Math.round(cy+r*Math.sin(rad));
+      if(px<1||px>=CANVAS_W-1||py<1||py>=CANVAS_H-1)continue;
+      const i=(py*w+px)*4;
+      // Accept any pixel that isn't the stroke colour
+      const notStroke=Math.abs(d[i]-sr)>20||Math.abs(d[i+1]-sg)>20||Math.abs(d[i+2]-sb)>20;
+      if(notStroke){
+        return{x:px,y:py};
+      }
+    }
+  }
+  return null;
+}
+
+function floodFill(sx,sy,hex,skipUndo){
+  if(!skipUndo)saveUndo();
+  const[fr,fg,fb]=hexToRgb(hex);
+  const img=ctx.getImageData(0,0,CANVAS_W,CANVAS_H);
+  const d=img.data,w=CANVAS_W,h=CANVAS_H;
+  if(sx<0||sx>=w||sy<0||sy>=h)return;
+  const si=(sy*w+sx)*4;
+  const tr=d[si],tg=d[si+1],tb=d[si+2];
+  if(tr===fr&&tg===fg&&tb===fb)return;
+  const stack=[[sx,sy]],vis=new Uint8Array(w*h);
+  while(stack.length){
+    const[x,y]=stack.pop();
+    if(x<0||x>=w||y<0||y>=h)continue;
+    const i=y*w+x;if(vis[i])continue;
+    const idx=i*4;if(!colMatch(d,idx,tr,tg,tb))continue;
+    vis[i]=1;d[idx]=fr;d[idx+1]=fg;d[idx+2]=fb;d[idx+3]=255;
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+  ctx.putImageData(img,0,0);
+}
+clearCanvas();
+</script>
+</body>
+</html>
