@@ -47,7 +47,7 @@ canvas{position:absolute;top:0;left:0;width:100%;height:100%;touch-action:none;d
 <body>
 
 <div id="canvas-area">
-  <div id="ver" style="position:fixed;bottom:10px;right:12px;color:#bbb;font-size:11px;font-family:monospace;z-index:999;pointer-events:none;">23</div>
+  <div id="ver" style="position:fixed;bottom:10px;right:12px;color:#bbb;font-size:11px;font-family:monospace;z-index:999;pointer-events:none;">25</div>
   <canvas id="c"></canvas>
   <div id="tab-undo" aria-label="Undo">
     <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
@@ -157,7 +157,11 @@ const LARGE_MIN=100, LARGE_RANGE=60;
 const SMOOTH=4, UNDO_MAX=8, FILL_TOL=18;
 const ERASE_THRESHOLD=28;
 // TTS: try FullyKiosk native API first, fall back to speechSynthesis
+let speakLast='', speakLastTime=0;
 function speak(txt){
+  const now=Date.now();
+  if(txt===speakLast&&now-speakLastTime<600)return;
+  speakLast=txt;speakLastTime=now;
   try{
     if(window.fully&&fully.textToSpeech){
       fully.textToSpeech(txt);
@@ -292,7 +296,7 @@ canvas.addEventListener('pointerdown',e=>{
   if(menuOpen){closeMenu();return;}
   const pos=getPos(e);
   if(pos.isTouch){
-    touchStartX=pos.x;touchStartY=pos.y;touchMoved=false;eraserActive=false;fillLocked=false;
+    touchStartX=pos.x;touchStartY=pos.y;touchMoved=false;eraserActive=false;
     lastX=pos.x;lastY=pos.y;return;
   }
   if(pos.isPen&&!penActive){
@@ -364,6 +368,7 @@ canvas.addEventListener('pointerup',e=>{
   }
   if(pos.isTouch&&!touchMoved&&!penActive&&!fillLocked){
     fillLocked=true;
+    setTimeout(()=>{fillLocked=false;},800);
     floodFill(Math.round(pos.x),Math.round(pos.y),colour,false);
     speak('fill');scheduleAutoSave();
   }
